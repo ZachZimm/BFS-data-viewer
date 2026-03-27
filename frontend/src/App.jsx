@@ -161,8 +161,8 @@ function LineChart({ points, format, metricLabel }) {
       >
         <defs>
           <linearGradient id="lineFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="rgba(101, 221, 186, 0.32)" />
-            <stop offset="100%" stopColor="rgba(101, 221, 186, 0)" />
+            <stop offset="0%" style={{ stopColor: "var(--chart-series)", stopOpacity: 0.22 }} />
+            <stop offset="100%" style={{ stopColor: "var(--chart-series)", stopOpacity: 0 }} />
           </linearGradient>
         </defs>
 
@@ -295,6 +295,7 @@ export default function App() {
   const [series, setSeries] = useState(null);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -381,13 +382,44 @@ export default function App() {
 
   const metricOptions = metadata?.metrics ?? [];
   const stateOptions = metadata?.dataset?.entities ?? [];
-  const downloadUrl = metadata
-    ? `/api/download?${buildQuery({
-        entity: filters.entity,
-        start_date: filters.startDate,
-        end_date: filters.endDate,
-      })}`
-    : "";
+
+  async function handleUpdateData() {
+    try {
+      setUpdating(true);
+      setError("");
+
+      const response = await fetch("/api/update-data", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update backend data");
+      }
+
+      const payload = await response.json();
+      const nextStartDate =
+        filters.startDate || payload.dateRange?.start || metadata?.dateRange.start || "";
+      const nextEndDate =
+        filters.endDate || payload.dateRange?.end || metadata?.dateRange.end || "";
+
+      const metadataResponse = await fetch("/api/metadata");
+      if (!metadataResponse.ok) {
+        throw new Error("Failed to reload metadata");
+      }
+
+      const nextMetadata = await metadataResponse.json();
+      setMetadata(nextMetadata);
+      setFilters((current) => ({
+        ...current,
+        startDate: nextStartDate,
+        endDate: nextEndDate,
+      }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUpdating(false);
+    }
+  }
 
   return (
     <div className="page-shell">
@@ -396,19 +428,17 @@ export default function App() {
           <div>
             <h1>State Business Formation Statistics</h1>
             <p className="page-intro">
-              Explore the live Census weekly state applications feed and download the
-              filtered rows shown in this view.
+              Explore the live Census weekly state applications feed and refresh the
+              backend cache against the source files when you want the latest pull.
             </p>
           </div>
           <button
-            className="download-button"
+            className="toolbar-button"
             type="button"
-            disabled={!downloadUrl}
-            onClick={() => {
-              window.location.assign(downloadUrl);
-            }}
+            disabled={!metadata || updating}
+            onClick={handleUpdateData}
           >
-            Download CSV
+            {updating ? "Updating..." : "Update Data"}
           </button>
         </header>
 
@@ -503,10 +533,6 @@ export default function App() {
                   <h3>Current selection</h3>
                   <dl>
                     <div>
-                      <dt>Source</dt>
-                      <dd>Live Census weekly CSV</dd>
-                    </div>
-                    <div>
                       <dt>Metric</dt>
                       <dd>{series.metricLabel}</dd>
                     </div>
@@ -517,6 +543,10 @@ export default function App() {
                     <div>
                       <dt>Observed points</dt>
                       <dd>{numberFormatter.format(series.summary.pointCount)}</dd>
+                    </div>
+                    <div>
+                      <dt>Source</dt>
+                      <dd>U.S. Census Bureau Business Formation Statistics weekly state applications</dd>
                     </div>
                   </dl>
                 </aside>

@@ -13,6 +13,9 @@
   --accent-soft: rgba(0, 212, 170, 0.14);
   --accent-2: #00a3cc;
   --danger: #ff6b9d;
+  /* Chart only: muted hues, cool weekly vs warm EMA for clear separation */
+  --chart-series: #7e96b0;
+  --chart-ema: #bea373;
 }
 
 * {
@@ -85,7 +88,7 @@ p {
   color: var(--text-muted);
 }
 
-.download-button {
+.toolbar-button {
   flex: 0 0 auto;
   min-height: 40px;
   padding: 0 14px;
@@ -96,17 +99,17 @@ p {
   cursor: pointer;
 }
 
-.download-button:hover {
+.toolbar-button:hover {
   background: #252525;
 }
 
-.download-button:focus {
+.toolbar-button:focus {
   outline: 2px solid var(--accent-soft);
   outline-offset: 1px;
   border-color: var(--accent);
 }
 
-.download-button:disabled {
+.toolbar-button:disabled {
   opacity: 0.6;
   cursor: default;
 }
@@ -289,11 +292,11 @@ input:disabled {
 }
 
 .legend-swatch--value {
-  background: var(--accent);
+  background: var(--chart-series);
 }
 
 .legend-swatch--ema {
-  background: var(--accent-2);
+  background: var(--chart-ema);
 }
 
 .chart {
@@ -314,30 +317,32 @@ input:disabled {
 
 .chart-line {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--chart-series);
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .chart-line--ema {
-  stroke: var(--accent-2);
+  stroke: var(--chart-ema);
   stroke-width: 2;
-  stroke-dasharray: 8 6;
+  stroke-dasharray: 7 5;
+  stroke-opacity: 0.92;
 }
 
 .chart-point {
-  fill: var(--accent-2);
-  stroke: var(--surface);
+  fill: var(--chart-series);
+  stroke: var(--bg);
   stroke-width: 2;
 }
 
 .chart-point--active {
-  fill: var(--accent);
+  fill: var(--chart-series);
 }
 
 .chart-point--ema {
-  fill: var(--accent-2);
+  fill: var(--chart-ema);
+  stroke: var(--bg);
 }
 
 .chart-crosshair {

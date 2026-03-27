@@ -136,6 +136,20 @@ def get_state_rows() -> list[dict[str, Any]]:
     return rows
 
 
+def refresh_data() -> dict[str, Any]:
+    _load_date_table.cache_clear()
+    get_state_rows.cache_clear()
+    metadata = get_metadata()
+    rows = get_state_rows()
+    return {
+        "status": "ok",
+        "rowCount": len(rows),
+        "stateCount": len(metadata["dataset"]["entities"]),
+        "dateRange": metadata["dateRange"],
+        "sourceUrls": metadata["dataset"]["sourceUrls"],
+    }
+
+
 def get_metadata() -> dict[str, Any]:
     rows = get_state_rows()
     states = sorted(
@@ -272,38 +286,3 @@ def get_records(
         "entityCode": selected_entity,
         "rows": payload_rows,
     }
-
-
-def build_download_csv(
-    entity: str | None = None,
-    start_date: str | None = None,
-    end_date: str | None = None,
-) -> str:
-    rows = get_filtered_rows(entity, start_date, end_date)
-    fieldnames = [
-        "year",
-        "week",
-        "entityCode",
-        "entityName",
-        "startDate",
-        "endDate",
-        *METRICS.keys(),
-    ]
-    output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
-    writer.writeheader()
-
-    for row in rows:
-        writer.writerow(
-            {
-                "year": row["Year"],
-                "week": row["Week"],
-                "entityCode": row["entity_code"],
-                "entityName": row["entity_name"],
-                "startDate": row["start_date"].isoformat(),
-                "endDate": row["end_date"].isoformat(),
-                **{metric: row[metric] for metric in METRICS},
-            }
-        )
-
-    return output.getvalue()

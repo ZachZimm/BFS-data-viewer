@@ -4,9 +4,9 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 
-from .data import METRICS, build_download_csv, get_metadata, get_records, get_series
+from .data import METRICS, get_metadata, get_records, get_series, refresh_data
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
@@ -29,14 +29,6 @@ def _ensure_metric(metric: str) -> str:
     if metric not in METRICS:
         raise HTTPException(status_code=404, detail=f"Unknown metric: {metric}")
     return metric
-
-
-def _csv_response(content: str, filename: str) -> StreamingResponse:
-    return StreamingResponse(
-        iter([content]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
 
 
 @app.get("/api/health")
@@ -79,15 +71,9 @@ def records(
     )
 
 
-@app.get("/api/download")
-def download(
-    entity: str | None = Query(default=None),
-    start_date: str | None = Query(default=None),
-    end_date: str | None = Query(default=None),
-) -> StreamingResponse:
-    entity_part = (entity or "CA").lower()
-    filename = f"bfs-state-{entity_part}-{(start_date or 'all')}-{(end_date or 'all')}.csv"
-    return _csv_response(build_download_csv(entity, start_date, end_date), filename)
+@app.post("/api/update-data")
+def update_data() -> dict:
+    return refresh_data()
 
 
 if FRONTEND_DIST.exists():
