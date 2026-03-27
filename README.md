@@ -1,10 +1,10 @@
 # Census BFS Data Viewer
 
-Interactive viewer for the live Census Business Formation Statistics monthly state applications feed.
+Interactive viewer for the live Census Business Formation Statistics weekly state applications feed, with locally materialized seasonal adjustment.
 
 ## Structure
 
-- `backend/`: FastAPI app that downloads the monthly BFS CSV and month-date table from Census and exposes JSON endpoints
+- `backend/`: FastAPI app that downloads the weekly BFS CSV and date table from Census, materializes raw and STL-adjusted series, and exposes JSON endpoints
 - `frontend/`: React + Vite client for filtering, charting, and tabular inspection
 - `start.sh`: launches the backend and frontend together for local development
 
@@ -12,8 +12,10 @@ Interactive viewer for the live Census Business Formation Statistics monthly sta
 
 The backend loads data directly from:
 
-- `https://www.census.gov/econ/bfs/csv/bfs_monthly.csv`
-- `https://www.census.gov/econ/bfs/csv/month_date_table.csv`
+- `https://www.census.gov/econ/bfs/csv/bfs_state_apps_weekly_nsa.csv`
+- `https://www.census.gov/econ/bfs/csv/date_table.csv`
+
+On refresh, the backend stores generated artifacts under `.cache/bfs/current/`, including the downloaded source CSVs, a materialized weekly cache containing both raw (`U`) and locally adjusted (`A`) rows, and cache metadata. Seasonal adjustment is computed once at refresh time with `STL(period=52, robust=True)` and is not recalculated per API call.
 
 ## Run locally
 

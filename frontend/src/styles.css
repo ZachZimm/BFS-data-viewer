@@ -13,7 +13,7 @@
   --accent-soft: rgba(0, 212, 170, 0.14);
   --accent-2: #00a3cc;
   --danger: #ff6b9d;
-  /* Chart only: muted hues, cool monthly series vs warm EMA for clear separation */
+  /* Chart only: muted hues, cool weekly series vs warm EMA for clear separation */
   --chart-series: #4a7eb8;
   --chart-ema: #bea373;
 }

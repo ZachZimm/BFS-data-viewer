@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const numberFormatter = new Intl.NumberFormat("en-US", {
+const integerFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
@@ -9,7 +9,14 @@ const decimalFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
 });
 
-function formatValue(value, format) {
+const shortDateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+function formatValue(value, format, seasonality) {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return "—";
   }
@@ -18,7 +25,11 @@ function formatValue(value, format) {
     return `${decimalFormatter.format(value)}%`;
   }
 
-  return numberFormatter.format(value);
+  if (format === "integer" && seasonality === "A") {
+    return decimalFormatter.format(value);
+  }
+
+  return integerFormatter.format(value);
 }
 
 function buildQuery(params) {
@@ -35,7 +46,7 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-function calculateEma(points, period = 6) {
+function calculateEma(points, period = 12) {
   const alpha = 2 / (period + 1);
   let previous = null;
 
@@ -45,12 +56,16 @@ function calculateEma(points, period = 6) {
   });
 }
 
-function formatMonthLabel(year, month) {
-  return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  });
+function formatShortDate(dateString) {
+  return shortDateFormatter.format(new Date(`${dateString}T00:00:00Z`));
+}
+
+function formatWeekWindow(point) {
+  return `${formatShortDate(point.startDate)} to ${formatShortDate(point.endDate)}`;
+}
+
+function formatWeekKey(year, week) {
+  return `${year}-W${String(week).padStart(2, "0")}`;
 }
 
 function EmptyState({ title, body }) {
@@ -62,7 +77,7 @@ function EmptyState({ title, body }) {
   );
 }
 
-function LineChart({ points, format, metricLabel }) {
+function LineChart({ points, format, metricLabel, seasonality }) {
   const cleanPoints = points.filter((point) => typeof point.value === "number");
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [tooltip, setTooltip] = useState(null);
@@ -79,7 +94,7 @@ function LineChart({ points, format, metricLabel }) {
 
   const width = 960;
   const height = 320;
-  const padding = { top: 18, right: 18, bottom: 44, left: 70 };
+  const padding = { top: 18, right: 18, bottom: 44, left: 76 };
   const values = emaPoints.flatMap((point) => [point.value, point.ema]);
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -145,17 +160,17 @@ function LineChart({ points, format, metricLabel }) {
       <div className="chart-header">
         <div>
           <h3>{metricLabel}</h3>
-          <p className="section-subtitle">Monthly values with a 6-month exponential moving average.</p>
+          <p className="section-subtitle">Weekly values with a 12-week exponential moving average.</p>
         </div>
         <div className="chart-meta">
           <p className="chart-latest">
-            Latest: <strong>{formatValue(latestPoint.value, format)}</strong>
+            Latest: <strong>{formatValue(latestPoint.value, format, seasonality)}</strong>
           </p>
           <div className="chart-legend" aria-hidden="true">
             <span className="legend-swatch legend-swatch--value" />
-            <span>Monthly</span>
+            <span>Weekly</span>
             <span className="legend-swatch legend-swatch--ema" />
-            <span>6-month EMA</span>
+            <span>12-week EMA</span>
           </div>
         </div>
       </div>
@@ -184,7 +199,7 @@ function LineChart({ points, format, metricLabel }) {
               y2={tick.y}
             />
             <text className="chart-axis" x={padding.left - 12} y={tick.y + 4} textAnchor="end">
-              {formatValue(tick.value, format)}
+              {formatValue(tick.value, format, seasonality)}
             </text>
           </g>
         ))}
@@ -230,7 +245,7 @@ function LineChart({ points, format, metricLabel }) {
             y={height - 12}
             textAnchor={index === 0 ? "start" : index === xLabels.length - 1 ? "end" : "middle"}
           >
-            {formatMonthLabel(point.year, point.month)}
+            {formatShortDate(point.endDate)}
           </text>
         ))}
       </svg>
@@ -239,21 +254,22 @@ function LineChart({ points, format, metricLabel }) {
           className={`chart-tooltip${tooltip.alignRight ? " chart-tooltip--right" : ""}`}
           style={{ left: `${tooltip.left}px`, top: `${tooltip.top}px` }}
         >
-          <p>{formatMonthLabel(activePoint.year, activePoint.month)}</p>
-          <strong>{formatValue(activePoint.value, format)}</strong>
-          <span>6-month EMA: {formatValue(activePoint.ema, format)}</span>
+          <p>{formatWeekKey(activePoint.year, activePoint.week)}</p>
+          <span>{formatWeekWindow(activePoint)}</span>
+          <strong>{formatValue(activePoint.value, format, seasonality)}</strong>
+          <span>12-week EMA: {formatValue(activePoint.ema, format, seasonality)}</span>
         </div>
       ) : null}
     </div>
   );
 }
 
-function RecordsTable({ rows, metrics }) {
+function RecordsTable({ rows, metrics, seasonality }) {
   if (!rows.length) {
     return (
       <EmptyState
         title="No rows returned"
-        body="The current filters do not match any records in the monthly state feed."
+        body="The current filters do not match any records in the weekly state feed."
       />
     );
   }
@@ -263,7 +279,7 @@ function RecordsTable({ rows, metrics }) {
       <table>
         <thead>
           <tr>
-            <th>Month</th>
+            <th>Week</th>
             <th>Start</th>
             <th>End</th>
             <th>State</th>
@@ -275,14 +291,14 @@ function RecordsTable({ rows, metrics }) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={`${row.entityCode}-${row.seasonality}-${row.year}-${row.month}`}>
-              <td>{formatMonthLabel(row.year, row.month)}</td>
+            <tr key={`${row.entityCode}-${row.seasonality}-${row.year}-${row.week}`}>
+              <td>{formatWeekKey(row.year, row.week)}</td>
               <td>{row.startDate}</td>
               <td>{row.endDate}</td>
               <td>{row.entityName}</td>
               <td>{row.seasonality === "A" ? "Seasonally adjusted" : "Not seasonally adjusted"}</td>
               {metrics.map((metric) => (
-                <td key={metric.id}>{formatValue(row[metric.id], metric.format)}</td>
+                <td key={metric.id}>{formatValue(row[metric.id], metric.format, seasonality)}</td>
               ))}
             </tr>
           ))}
@@ -364,7 +380,7 @@ export default function App() {
         ]);
 
         if (!seriesResponse.ok || !recordsResponse.ok) {
-          throw new Error("Failed to load monthly state data");
+          throw new Error("Failed to load weekly state data");
         }
 
         const [seriesPayload, recordsPayload] = await Promise.all([
@@ -435,8 +451,8 @@ export default function App() {
           <div>
             <h1>State Business Formation Statistics</h1>
             <p className="page-intro">
-              Explore Census monthly state application data with seasonally adjusted and
-              not seasonally adjusted series in the same live source.
+              Explore Census weekly state application data with locally materialized STL-adjusted
+              and raw series.
             </p>
           </div>
           <button
@@ -453,7 +469,7 @@ export default function App() {
           <div className="section-header">
             <div>
               <h2>Filters</h2>
-              <p className="section-subtitle">Choose a state, seasonality, metric, and date range.</p>
+              <p className="section-subtitle">Choose a state, seasonality, metric, and weekly date range.</p>
             </div>
             {loading ? <span className="status-chip">Refreshing data</span> : null}
           </div>
@@ -554,19 +570,19 @@ export default function App() {
                 <dl className="stat-list">
                   <div>
                     <dt>Latest</dt>
-                    <dd>{formatValue(series.summary.latestValue, series.metricFormat)}</dd>
+                    <dd>{formatValue(series.summary.latestValue, series.metricFormat, filters.seasonality)}</dd>
                   </div>
                   <div>
                     <dt>Average</dt>
-                    <dd>{formatValue(series.summary.average, series.metricFormat)}</dd>
+                    <dd>{formatValue(series.summary.average, series.metricFormat, filters.seasonality)}</dd>
                   </div>
                   <div>
                     <dt>Minimum</dt>
-                    <dd>{formatValue(series.summary.minimum, series.metricFormat)}</dd>
+                    <dd>{formatValue(series.summary.minimum, series.metricFormat, filters.seasonality)}</dd>
                   </div>
                   <div>
                     <dt>Maximum</dt>
-                    <dd>{formatValue(series.summary.maximum, series.metricFormat)}</dd>
+                    <dd>{formatValue(series.summary.maximum, series.metricFormat, filters.seasonality)}</dd>
                   </div>
                 </dl>
               </div>
@@ -576,6 +592,7 @@ export default function App() {
                   points={series.points}
                   format={series.metricFormat}
                   metricLabel={`${series.entityName} · ${series.metricLabel}`}
+                  seasonality={filters.seasonality}
                 />
 
                 <aside className="detail-panel">
@@ -595,11 +612,14 @@ export default function App() {
                     </div>
                     <div>
                       <dt>Observed points</dt>
-                      <dd>{numberFormatter.format(series.summary.pointCount)}</dd>
+                      <dd>{integerFormatter.format(series.summary.pointCount)}</dd>
                     </div>
                     <div>
                       <dt>Source</dt>
-                      <dd>U.S. Census Bureau Business Formation Statistics monthly state applications</dd>
+                      <dd>
+                        U.S. Census Bureau Business Formation Statistics weekly state applications,
+                        with STL seasonal adjustment materialized locally at refresh time
+                      </dd>
                     </div>
                   </dl>
                 </aside>
@@ -610,10 +630,10 @@ export default function App() {
               <div className="section-header">
                 <div>
                   <h2>Underlying rows</h2>
-                  <p className="section-subtitle">Most recent 104 monthly observations for the current filter set.</p>
+                  <p className="section-subtitle">Most recent 104 weekly observations for the current filter set.</p>
                 </div>
               </div>
-              <RecordsTable rows={records} metrics={metricOptions} />
+              <RecordsTable rows={records} metrics={metricOptions} seasonality={filters.seasonality} />
             </section>
           </>
         ) : null}
