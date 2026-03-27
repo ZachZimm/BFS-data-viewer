@@ -412,7 +412,7 @@ export default function App() {
           </button>
         </header>
 
-        <section className="panel controls-panel">
+        <section className="content-section">
           <div className="section-header">
             <div>
               <h2>Filters</h2>
@@ -483,39 +483,15 @@ export default function App() {
         </section>
 
         {error ? (
-          <section className="panel">
-            <EmptyState title="Viewer error" body={error} />
-          </section>
+          <div className="inline-alert" role="alert">
+            <strong>Viewer error</strong>
+            <p>{error}</p>
+          </div>
         ) : null}
 
         {series ? (
           <>
-            <section className="panel">
-              <div className="section-header section-header--top">
-                <div>
-                  <h2>{series.entityName}</h2>
-                  <p className="section-subtitle">{series.metricLabel}</p>
-                </div>
-                <dl className="stat-list">
-                  <div>
-                    <dt>Latest</dt>
-                    <dd>{formatValue(series.summary.latestValue, series.metricFormat)}</dd>
-                  </div>
-                  <div>
-                    <dt>Average</dt>
-                    <dd>{formatValue(series.summary.average, series.metricFormat)}</dd>
-                  </div>
-                  <div>
-                    <dt>Minimum</dt>
-                    <dd>{formatValue(series.summary.minimum, series.metricFormat)}</dd>
-                  </div>
-                  <div>
-                    <dt>Maximum</dt>
-                    <dd>{formatValue(series.summary.maximum, series.metricFormat)}</dd>
-                  </div>
-                </dl>
-              </div>
-
+            <section className="content-section">
               <div className="content-grid">
                 <LineChart
                   points={series.points}
@@ -547,7 +523,7 @@ export default function App() {
               </div>
             </section>
 
-            <section className="panel">
+            <section className="content-section">
               <div className="section-header">
                 <div>
                   <h2>Underlying rows</h2>
