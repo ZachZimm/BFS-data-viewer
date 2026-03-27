@@ -469,7 +469,6 @@ export default function App() {
           <div className="section-header">
             <div>
               <h2>Filters</h2>
-              <p className="section-subtitle">Choose a state or all-states aggregate, seasonality, metric, and weekly date range.</p>
             </div>
             {loading ? <span className="status-chip">Refreshing data</span> : null}
           </div>
