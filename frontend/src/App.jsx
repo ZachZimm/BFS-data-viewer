@@ -35,13 +35,21 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-function calculateEma(points, period = 12) {
+function calculateEma(points, period = 6) {
   const alpha = 2 / (period + 1);
   let previous = null;
 
   return points.map((point) => {
     previous = previous === null ? point.value : point.value * alpha + previous * (1 - alpha);
     return { ...point, ema: previous };
+  });
+}
+
+function formatMonthLabel(year, month) {
+  return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    timeZone: "UTC",
   });
 }
 
@@ -64,7 +72,7 @@ function LineChart({ points, format, metricLabel }) {
     return (
       <EmptyState
         title="No series data"
-        body="Adjust the metric, state, or date range to load weekly observations."
+        body="Adjust the metric, state, seasonality, or date range to load observations."
       />
     );
   }
@@ -137,7 +145,7 @@ function LineChart({ points, format, metricLabel }) {
       <div className="chart-header">
         <div>
           <h3>{metricLabel}</h3>
-          <p className="section-subtitle">Weekly values with a 12-week exponential moving average.</p>
+          <p className="section-subtitle">Monthly values with a 6-month exponential moving average.</p>
         </div>
         <div className="chart-meta">
           <p className="chart-latest">
@@ -145,9 +153,9 @@ function LineChart({ points, format, metricLabel }) {
           </p>
           <div className="chart-legend" aria-hidden="true">
             <span className="legend-swatch legend-swatch--value" />
-            <span>Weekly</span>
+            <span>Monthly</span>
             <span className="legend-swatch legend-swatch--ema" />
-            <span>12-week EMA</span>
+            <span>6-month EMA</span>
           </div>
         </div>
       </div>
@@ -161,8 +169,8 @@ function LineChart({ points, format, metricLabel }) {
       >
         <defs>
           <linearGradient id="lineFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" style={{ stopColor: "var(--chart-series)", stopOpacity: 0.22 }} />
-            <stop offset="100%" style={{ stopColor: "var(--chart-series)", stopOpacity: 0 }} />
+            <stop offset="0%" stopColor="rgba(101, 221, 186, 0.32)" />
+            <stop offset="100%" stopColor="rgba(101, 221, 186, 0)" />
           </linearGradient>
         </defs>
 
@@ -222,7 +230,7 @@ function LineChart({ points, format, metricLabel }) {
             y={height - 12}
             textAnchor={index === 0 ? "start" : index === xLabels.length - 1 ? "end" : "middle"}
           >
-            {point.startDate}
+            {formatMonthLabel(point.year, point.month)}
           </text>
         ))}
       </svg>
@@ -231,9 +239,9 @@ function LineChart({ points, format, metricLabel }) {
           className={`chart-tooltip${tooltip.alignRight ? " chart-tooltip--right" : ""}`}
           style={{ left: `${tooltip.left}px`, top: `${tooltip.top}px` }}
         >
-          <p>{activePoint.startDate}</p>
+          <p>{formatMonthLabel(activePoint.year, activePoint.month)}</p>
           <strong>{formatValue(activePoint.value, format)}</strong>
-          <span>12-week EMA: {formatValue(activePoint.ema, format)}</span>
+          <span>6-month EMA: {formatValue(activePoint.ema, format)}</span>
         </div>
       ) : null}
     </div>
@@ -245,7 +253,7 @@ function RecordsTable({ rows, metrics }) {
     return (
       <EmptyState
         title="No rows returned"
-        body="The current filters do not match any records in the weekly state feed."
+        body="The current filters do not match any records in the monthly state feed."
       />
     );
   }
@@ -255,10 +263,11 @@ function RecordsTable({ rows, metrics }) {
       <table>
         <thead>
           <tr>
-            <th>Week</th>
+            <th>Month</th>
             <th>Start</th>
             <th>End</th>
             <th>State</th>
+            <th>Seasonality</th>
             {metrics.map((metric) => (
               <th key={metric.id}>{metric.label}</th>
             ))}
@@ -266,13 +275,12 @@ function RecordsTable({ rows, metrics }) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={`${row.entityCode}-${row.year}-${row.week}`}>
-              <td>
-                {row.year}-W{String(row.week).padStart(2, "0")}
-              </td>
+            <tr key={`${row.entityCode}-${row.seasonality}-${row.year}-${row.month}`}>
+              <td>{formatMonthLabel(row.year, row.month)}</td>
               <td>{row.startDate}</td>
               <td>{row.endDate}</td>
               <td>{row.entityName}</td>
+              <td>{row.seasonality === "A" ? "Seasonally adjusted" : "Not seasonally adjusted"}</td>
               {metrics.map((metric) => (
                 <td key={metric.id}>{formatValue(row[metric.id], metric.format)}</td>
               ))}
@@ -287,8 +295,9 @@ function RecordsTable({ rows, metrics }) {
 export default function App() {
   const [metadata, setMetadata] = useState(null);
   const [filters, setFilters] = useState({
-    metric: "BA_NSA",
+    metric: "BA",
     entity: "CA",
+    seasonality: "A",
     startDate: "",
     endDate: "",
   });
@@ -312,6 +321,7 @@ export default function App() {
         setFilters((current) => ({
           ...current,
           entity: payload.dataset.defaultEntity,
+          seasonality: payload.dataset.defaultSeasonality,
           startDate: payload.dateRange.start,
           endDate: payload.dateRange.end,
         }));
@@ -339,6 +349,7 @@ export default function App() {
       try {
         const params = {
           entity: filters.entity,
+          seasonality: filters.seasonality,
           start_date: filters.startDate,
           end_date: filters.endDate,
         };
@@ -353,7 +364,7 @@ export default function App() {
         ]);
 
         if (!seriesResponse.ok || !recordsResponse.ok) {
-          throw new Error("Failed to load state data");
+          throw new Error("Failed to load monthly state data");
         }
 
         const [seriesPayload, recordsPayload] = await Promise.all([
@@ -380,9 +391,6 @@ export default function App() {
     return () => controller.abort();
   }, [metadata, filters]);
 
-  const metricOptions = metadata?.metrics ?? [];
-  const stateOptions = metadata?.dataset?.entities ?? [];
-
   async function handleUpdateData() {
     try {
       setUpdating(true);
@@ -396,12 +404,6 @@ export default function App() {
         throw new Error("Failed to update backend data");
       }
 
-      const payload = await response.json();
-      const nextStartDate =
-        filters.startDate || payload.dateRange?.start || metadata?.dateRange.start || "";
-      const nextEndDate =
-        filters.endDate || payload.dateRange?.end || metadata?.dateRange.end || "";
-
       const metadataResponse = await fetch("/api/metadata");
       if (!metadataResponse.ok) {
         throw new Error("Failed to reload metadata");
@@ -411,8 +413,9 @@ export default function App() {
       setMetadata(nextMetadata);
       setFilters((current) => ({
         ...current,
-        startDate: nextStartDate,
-        endDate: nextEndDate,
+        seasonality: current.seasonality || nextMetadata.dataset.defaultSeasonality,
+        startDate: current.startDate || nextMetadata.dateRange.start,
+        endDate: current.endDate || nextMetadata.dateRange.end,
       }));
     } catch (err) {
       setError(err.message);
@@ -421,6 +424,10 @@ export default function App() {
     }
   }
 
+  const metricOptions = metadata?.metrics ?? [];
+  const stateOptions = metadata?.dataset?.entities ?? [];
+  const seasonalityOptions = metadata?.dataset?.seasonalityOptions ?? [];
+
   return (
     <div className="page-shell">
       <main className="layout">
@@ -428,8 +435,8 @@ export default function App() {
           <div>
             <h1>State Business Formation Statistics</h1>
             <p className="page-intro">
-              Explore the live Census weekly state applications feed and refresh the
-              backend cache against the source files when you want the latest pull.
+              Explore Census monthly state application data with seasonally adjusted and
+              not seasonally adjusted series in the same live source.
             </p>
           </div>
           <button
@@ -442,11 +449,11 @@ export default function App() {
           </button>
         </header>
 
-        <section className="content-section">
+        <section className="panel controls-panel">
           <div className="section-header">
             <div>
               <h2>Filters</h2>
-              <p className="section-subtitle">Choose a state, metric, and date range.</p>
+              <p className="section-subtitle">Choose a state, seasonality, metric, and date range.</p>
             </div>
             {loading ? <span className="status-chip">Refreshing data</span> : null}
           </div>
@@ -463,6 +470,22 @@ export default function App() {
                 {stateOptions.map((entity) => (
                   <option key={entity.value} value={entity.value}>
                     {entity.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Seasonality
+              <select
+                value={filters.seasonality}
+                onChange={(event) =>
+                  setFilters((current) => ({ ...current, seasonality: event.target.value }))
+                }
+              >
+                {seasonalityOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>
@@ -513,15 +536,41 @@ export default function App() {
         </section>
 
         {error ? (
-          <div className="inline-alert" role="alert">
-            <strong>Viewer error</strong>
-            <p>{error}</p>
-          </div>
+          <section className="panel">
+            <EmptyState title="Viewer error" body={error} />
+          </section>
         ) : null}
 
         {series ? (
           <>
-            <section className="content-section">
+            <section className="panel">
+              <div className="section-header section-header--top">
+                <div>
+                  <h2>{series.entityName}</h2>
+                  <p className="section-subtitle">
+                    {series.metricLabel} · {series.seasonalityLabel}
+                  </p>
+                </div>
+                <dl className="stat-list">
+                  <div>
+                    <dt>Latest</dt>
+                    <dd>{formatValue(series.summary.latestValue, series.metricFormat)}</dd>
+                  </div>
+                  <div>
+                    <dt>Average</dt>
+                    <dd>{formatValue(series.summary.average, series.metricFormat)}</dd>
+                  </div>
+                  <div>
+                    <dt>Minimum</dt>
+                    <dd>{formatValue(series.summary.minimum, series.metricFormat)}</dd>
+                  </div>
+                  <div>
+                    <dt>Maximum</dt>
+                    <dd>{formatValue(series.summary.maximum, series.metricFormat)}</dd>
+                  </div>
+                </dl>
+              </div>
+
               <div className="content-grid">
                 <LineChart
                   points={series.points}
@@ -537,7 +586,11 @@ export default function App() {
                       <dd>{series.metricLabel}</dd>
                     </div>
                     <div>
-                      <dt>Latest week</dt>
+                      <dt>Seasonality</dt>
+                      <dd>{series.seasonalityLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Latest period</dt>
                       <dd>{series.summary.latestWindow || "—"}</dd>
                     </div>
                     <div>
@@ -546,18 +599,18 @@ export default function App() {
                     </div>
                     <div>
                       <dt>Source</dt>
-                      <dd>U.S. Census Bureau Business Formation Statistics weekly state applications</dd>
+                      <dd>U.S. Census Bureau Business Formation Statistics monthly state applications</dd>
                     </div>
                   </dl>
                 </aside>
               </div>
             </section>
 
-            <section className="content-section">
+            <section className="panel">
               <div className="section-header">
                 <div>
                   <h2>Underlying rows</h2>
-                  <p className="section-subtitle">Most recent 104 weeks for the current filter set.</p>
+                  <p className="section-subtitle">Most recent 104 monthly observations for the current filter set.</p>
                 </div>
               </div>
               <RecordsTable rows={records} metrics={metricOptions} />

@@ -1,10 +1,10 @@
 # Census BFS Data Viewer
 
-Interactive viewer for the live Census Business Formation Statistics weekly state feed.
+Interactive viewer for the live Census Business Formation Statistics monthly state applications feed.
 
 ## Structure
 
-- `backend/`: FastAPI app that downloads the weekly state CSV and date table from Census and exposes JSON endpoints
+- `backend/`: FastAPI app that downloads the monthly BFS CSV and month-date table from Census and exposes JSON endpoints
 - `frontend/`: React + Vite client for filtering, charting, and tabular inspection
 - `start.sh`: launches the backend and frontend together for local development
 
@@ -12,8 +12,8 @@ Interactive viewer for the live Census Business Formation Statistics weekly stat
 
 The backend loads data directly from:
 
-- `https://www.census.gov/econ/bfs/csv/bfs_state_apps_weekly_nsa.csv`
-- `https://www.census.gov/econ/bfs/csv/date_table.csv`
+- `https://www.census.gov/econ/bfs/csv/bfs_monthly.csv`
+- `https://www.census.gov/econ/bfs/csv/month_date_table.csv`
 
 ## Run locally
 

@@ -30,12 +30,12 @@ async def _midnight_refresh_loop() -> None:
         try:
             result = refresh_data()
             logger.info(
-                "Auto-refreshed Census BFS state data at midnight: %s rows across %s states",
+                "Auto-refreshed Census BFS monthly state applications at midnight: %s rows across %s states",
                 result["rowCount"],
                 result["stateCount"],
             )
         except Exception:
-            logger.exception("Midnight Census BFS data refresh failed")
+            logger.exception("Midnight Census BFS monthly data refresh failed")
 
 
 @asynccontextmanager
@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
 
-app = FastAPI(title="Census BFS State Data Viewer", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Census BFS Monthly State Data Viewer", version="0.3.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -82,14 +82,16 @@ def metadata() -> dict:
 
 @app.get("/api/series")
 def series(
-    metric: str = Query(default="BA_NSA"),
+    metric: str = Query(default="BA"),
     entity: str | None = Query(default=None),
+    seasonality: str | None = Query(default=None),
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
 ) -> dict:
     return get_series(
         metric=_ensure_metric(metric),
         entity=entity,
+        seasonality=seasonality,
         start_date=start_date,
         end_date=end_date,
     )
@@ -98,12 +100,14 @@ def series(
 @app.get("/api/records")
 def records(
     entity: str | None = Query(default=None),
+    seasonality: str | None = Query(default=None),
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
     limit: int = Query(default=104, ge=1, le=500),
 ) -> dict:
     return get_records(
         entity=entity,
+        seasonality=seasonality,
         start_date=start_date,
         end_date=end_date,
         limit=limit,
