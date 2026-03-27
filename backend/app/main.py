@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+from datetime import datetime, time, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -10,8 +14,43 @@ from .data import METRICS, get_metadata, get_records, get_series, refresh_data
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
+logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Census BFS State Data Viewer", version="0.2.0")
+
+def _seconds_until_next_midnight() -> float:
+    now = datetime.now().astimezone()
+    next_day = now.date() + timedelta(days=1)
+    next_midnight = datetime.combine(next_day, time.min, tzinfo=now.tzinfo)
+    return max((next_midnight - now).total_seconds(), 1.0)
+
+
+async def _midnight_refresh_loop() -> None:
+    while True:
+        await asyncio.sleep(_seconds_until_next_midnight())
+        try:
+            result = refresh_data()
+            logger.info(
+                "Auto-refreshed Census BFS state data at midnight: %s rows across %s states",
+                result["rowCount"],
+                result["stateCount"],
+            )
+        except Exception:
+            logger.exception("Midnight Census BFS data refresh failed")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    refresh_task = asyncio.create_task(_midnight_refresh_loop())
+    try:
+        yield
+    finally:
+        refresh_task.cancel()
+        try:
+            await refresh_task
+        except asyncio.CancelledError:
+            pass
+
+app = FastAPI(title="Census BFS State Data Viewer", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
