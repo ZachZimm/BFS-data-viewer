@@ -560,33 +560,6 @@ export default function App() {
         {series ? (
           <>
             <section className="panel">
-              <div className="section-header section-header--top">
-                <div>
-                  <h2>{series.entityName}</h2>
-                  <p className="section-subtitle">
-                    {series.metricLabel} · {series.seasonalityLabel}
-                  </p>
-                </div>
-                <dl className="stat-list">
-                  <div>
-                    <dt>Latest</dt>
-                    <dd>{formatValue(series.summary.latestValue, series.metricFormat, filters.seasonality)}</dd>
-                  </div>
-                  <div>
-                    <dt>Average</dt>
-                    <dd>{formatValue(series.summary.average, series.metricFormat, filters.seasonality)}</dd>
-                  </div>
-                  <div>
-                    <dt>Minimum</dt>
-                    <dd>{formatValue(series.summary.minimum, series.metricFormat, filters.seasonality)}</dd>
-                  </div>
-                  <div>
-                    <dt>Maximum</dt>
-                    <dd>{formatValue(series.summary.maximum, series.metricFormat, filters.seasonality)}</dd>
-                  </div>
-                </dl>
-              </div>
-
               <div className="content-grid">
                 <LineChart
                   points={series.points}

@@ -124,6 +124,10 @@ p {
   padding-bottom: 0;
 }
 
+.controls-panel {
+  margin-bottom: 16px;
+}
+
 .inline-alert {
   margin: 16px 0 0;
   padding: 12px 0 16px;
