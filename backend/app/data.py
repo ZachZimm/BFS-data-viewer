@@ -26,6 +26,8 @@ WEEKLY_URL = "https://www.census.gov/econ/bfs/csv/bfs_state_apps_weekly_nsa.csv"
 DATE_TABLE_URL = "https://www.census.gov/econ/bfs/csv/date_table.csv"
 HTTP_HEADERS = {"User-Agent": "Mozilla/5.0"}
 ADJUSTMENT_METHOD = "STL(period=52, robust=True)"
+ALL_STATES_CODE = "ALL"
+ALL_STATES_LABEL = "All States"
 SEASONALITY_OPTIONS = [
     {"value": "A", "label": "Seasonally adjusted"},
     {"value": "U", "label": "Not seasonally adjusted"},
@@ -181,7 +183,22 @@ def _build_materialized_rows(raw_rows: list[dict[str, Any]]) -> list[dict[str, A
             adjusted_values = _adjust_state_metric(state_frame, metric)
             adjusted_materialized.loc[adjusted_index, metric] = adjusted_values
 
-    combined = pd.concat([raw_materialized, adjusted_materialized], ignore_index=True)
+    aggregate_frames: list[pd.DataFrame] = []
+    for materialized_frame in (raw_materialized, adjusted_materialized):
+        aggregate = (
+            materialized_frame.groupby(["seasonality", "year", "week", "start_date", "end_date"], as_index=False)[
+                list(METRICS.keys())
+            ]
+            .sum()
+            .assign(entity_code=ALL_STATES_CODE, entity_name=ALL_STATES_LABEL)
+        )
+        aggregate_frames.append(aggregate)
+
+    combined = pd.concat(
+        [raw_materialized, adjusted_materialized, *aggregate_frames],
+        ignore_index=True,
+        sort=False,
+    )
     combined = combined.sort_values(["entity_code", "seasonality", "start_date"]).reset_index(drop=True)
 
     rows: list[dict[str, Any]] = []
@@ -335,10 +352,18 @@ def get_materialized_rows() -> list[dict[str, Any]]:
 def get_metadata() -> dict[str, Any]:
     rows = get_materialized_rows()
     cache_metadata = get_cache_metadata()
-    entities = sorted(
+    entity_pairs = sorted(
         {(row["entity_code"], row["entity_name"]) for row in rows},
         key=lambda item: (item[1], item[0]),
     )
+    entities = [
+        {"value": ALL_STATES_CODE, "label": ALL_STATES_LABEL},
+        *[
+            {"value": code, "label": name}
+            for code, name in entity_pairs
+            if code != ALL_STATES_CODE
+        ],
+    ]
     return {
         "dataset": {
             "id": "state-weekly-applications",
@@ -348,7 +373,7 @@ def get_metadata() -> dict[str, Any]:
             "defaultSeasonality": "A",
             "sourceUrls": cache_metadata["sourceUrls"],
             "dateRange": cache_metadata["dateRange"],
-            "entities": [{"value": code, "label": name} for code, name in entities],
+            "entities": entities,
             "seasonalityOptions": SEASONALITY_OPTIONS,
             "adjustmentMethod": cache_metadata["adjustmentMethod"],
             "lastRefreshedAt": cache_metadata["refreshedAt"],
@@ -398,7 +423,7 @@ def get_series(
     rows = get_filtered_rows(entity, seasonality, start_date, end_date)
     selected_entity = entity or "CA"
     selected_seasonality = seasonality or "A"
-    entity_name = rows[0]["entity_name"] if rows else STATE_NAMES.get(selected_entity, selected_entity)
+    entity_name = rows[0]["entity_name"] if rows else STATE_NAMES.get(selected_entity, ALL_STATES_LABEL if selected_entity == ALL_STATES_CODE else selected_entity)
 
     points = [
         {
